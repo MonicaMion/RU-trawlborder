@@ -21,59 +21,56 @@ execute:
 ## Introduction
 
 ```{r}
+#| warning: false
 #| message: false
 # Install libraries if not already installed using install.packages("package_name")
 library(dplyr)
 library(ggplot2)
 library(patchwork)
-
 home <- here::here()
 ```
 
 ## Load data
 
 ```{r}
+#| warning: false
 #| output: false
-
-
 data <- read.csv(paste0(home, "/Data/Blubber thickness hunted grey seals 2024-2025.csv"), fileEncoding = "UTF-8") #UTF-8 to read swedish letters
-
 #check column names
 colnames(data)
 
 ```
 
-### Clean and factor columns
+## Clean data
 
 ```{r}
-#| echo: false
+#| warning: false
+#| output: false
 #rename columns
 data <- dplyr::rename(data, Sex = kön)
 data <- dplyr::rename(data, Length = "längd..från.nos.till.svansspets.i.cm.")
 data <- dplyr::rename(data, "Blubber thickness" = "Späcktjocklek")
-
 #check structure of the data
 str(data)
 data$`Blubber thickness` <- as.numeric(data$`Blubber thickness`) #this should be numeric not factor
-
 # Replace Swedish sex labels with English
 data$Sex[data$Sex == "Hane"] <- "Male"
 data$Sex[data$Sex == "Hona"] <- "Female"
 data$Sex <- factor(data$Sex, levels = c("Male", "Female"))
-
-
 #select data for Södermanland and 2024
 unique(data$Län)
 data <- data %>% dplyr::filter(Län == "Södermanland län")
 unique(data$year)
 data <- data %>% dplyr::filter(year == "2024")
 
-
 ```
 
+## Plot data
 
 ```{r}
 #| fig-height: 12
+
+
 # --- 1. Length Frequency Distribution (stacked by month) ---
 # Calculate median per month
 medians <- data %>%
@@ -87,7 +84,7 @@ p1 <- data %>%
   geom_histogram(position = "stack", bins = 10, color = "black") +
   facet_wrap(~month) +
   geom_vline(data = medians, aes(xintercept = median_length),
-             color = "black", linetype = "dashed", size = 0.8) +
+             color = "black", linetype = "dashed", linewidth = 0.8) +
   labs(
     x = "Length (cm)",
     y = "Number of seal",
@@ -149,6 +146,10 @@ combined_plot <- (p1) / (p2) / (p3) +
   plot_annotation(tag_levels = "a")
 
 combined_plot
+```
+
+```{r}
+#| echo: false
 # --- Save combined figure ---
 ggsave(
   filename = file.path(home, "Plot", "SÖDERMANLAND_GS_2024_blubber_hunt_report.png"),
@@ -159,6 +160,7 @@ ggsave(
 ```
 
 ```{r}
+#| echo: false
 knitr::knit_exit() 
 ```
 
