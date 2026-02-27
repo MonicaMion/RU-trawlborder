@@ -1,0 +1,164 @@
+---
+title: "Grey seals - Blubber thickness - hunting records"
+author: "Monica Mion"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+format: 
+  html:
+    toc: true
+    page-layout: full
+    embed-resources: true
+knitr: 
+  opts_chunk:
+    fig.align: center
+    out-width: 80%
+editor: source
+execute: 
+  echo: true
+  eval: true
+  cache: false
+---
+
+## Introduction
+
+```{r}
+#| message: false
+# Install libraries if not already installed using install.packages("package_name")
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+
+home <- here::here()
+```
+
+## Load data
+
+```{r}
+#| output: false
+
+
+data <- read.csv(paste0(home, "/Data/Blubber thickness hunted grey seals 2024-2025.csv"), fileEncoding = "UTF-8") #UTF-8 to read swedish letters
+
+#check column names
+colnames(data)
+
+```
+
+### Clean and factor columns
+
+```{r}
+#| echo: false
+#rename columns
+data <- dplyr::rename(data, Sex = kön)
+data <- dplyr::rename(data, Length = "längd..från.nos.till.svansspets.i.cm.")
+data <- dplyr::rename(data, "Blubber thickness" = "Späcktjocklek")
+
+#check structure of the data
+str(data)
+data$`Blubber thickness` <- as.numeric(data$`Blubber thickness`) #this should be numeric not factor
+
+# Replace Swedish sex labels with English
+data$Sex[data$Sex == "Hane"] <- "Male"
+data$Sex[data$Sex == "Hona"] <- "Female"
+data$Sex <- factor(data$Sex, levels = c("Male", "Female"))
+
+
+#select data for Södermanland and 2024
+unique(data$Län)
+data <- data %>% dplyr::filter(Län == "Södermanland län")
+unique(data$year)
+data <- data %>% dplyr::filter(year == "2024")
+
+
+```
+
+
+```{r}
+#| fig-height: 12
+# --- 1. Length Frequency Distribution (stacked by month) ---
+# Calculate median per month
+medians <- data %>%
+  filter(!is.na(month)) %>%
+  group_by(month) %>%
+  summarise(median_length = median(`Length`, na.rm = TRUE))
+
+p1 <- data %>%
+  filter(!is.na(month), !is.na(Sex), !is.na(`Length`)) %>%  
+  ggplot(aes(x = `Length`, fill = Sex)) +
+  geom_histogram(position = "stack", bins = 10, color = "black") +
+  facet_wrap(~month) +
+  geom_vline(data = medians, aes(xintercept = median_length),
+             color = "black", linetype = "dashed", size = 0.8) +
+  labs(
+    x = "Length (cm)",
+    y = "Number of seal",
+    #title = "Length Frequency Distribution (Stacked) by month"
+  ) +
+  theme_minimal(base_size = 14) +
+  scale_fill_manual(values = c("#0072B2", "#D55E00"))
+
+# --- 2. Sex ratio by month (proportional stacked bars) ---
+# Calculate totals per month
+totals <- data %>%
+  count(month) %>%
+  rename(total = n)
+
+# Create proportional stacked bar plot with totals on top
+p2 <- data %>%
+  filter(!is.na(Sex))%>%
+  count(month, Sex) %>%
+  group_by(month) %>%
+  mutate(percent = n / sum(n)) %>%
+  ggplot(aes(x = month, y = percent, fill = Sex)) +
+  geom_col(color = "black", width = 0.7) +
+  # Percent labels inside bars
+  geom_text(aes(label = scales::percent(percent, accuracy = 1)),
+            position = position_stack(vjust = 0.5), size = 4) +
+  # Total count labels on top of bars
+  geom_text(data = totals, aes(x = month, y = 1, label = total),
+            inherit.aes = FALSE, vjust = -0.5, size = 4) +
+  labs(
+    x = "Month",
+    y = "Proportion",
+    fill = "Sex"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 1.1)) +
+  theme_minimal(base_size = 14) +
+  scale_fill_manual(values = c("#0072B2", "#D55E00"))
+
+# --- 3. Blubber thickness by month with jitter ---
+
+p3 <- data %>%
+  filter(!is.na(`Blubber thickness`), !is.na(Sex)) %>% 
+  ggplot( aes(x = month, y = `Blubber thickness`, fill = Sex)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.7) +
+  geom_jitter(aes(color = Sex), width = 0.15, size = 2, alpha = 0.7) +
+  labs(
+    x = "Month",
+    y = "Blubber thickness (mm)",
+    #title = "Blubber Thickness by month"
+  ) +
+  theme_minimal(base_size = 14) +
+  scale_fill_manual(values = c("#0072B2", "#D55E00")) +
+  scale_color_manual(values = c("#0072B2", "#D55E00")) +
+  guides(color = "none")
+
+
+
+# --- Combine plots in 2x2 grid with labels a), b), c), d) ---
+combined_plot <- (p1) / (p2) / (p3) +
+  plot_annotation(tag_levels = "a")
+
+combined_plot
+# --- Save combined figure ---
+ggsave(
+  filename = file.path(home, "Plot", "SÖDERMANLAND_GS_2024_blubber_hunt_report.png"),
+  plot = combined_plot,
+  width = 12, height = 12, dpi = 300
+)
+
+```
+
+```{r}
+knitr::knit_exit() 
+```
+
